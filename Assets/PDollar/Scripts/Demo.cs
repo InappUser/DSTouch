@@ -3,7 +3,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
-
+using DS4Api;
 using PDollarGestureRecognizer;
 
 public class Demo : MonoBehaviour {
@@ -28,11 +28,16 @@ public class Demo : MonoBehaviour {
 	private string message;
 	private bool recognized;
 	private string newGestureName = "";
-
+//1919-941 - from Screen.width - Screen.width / 3, Screen.height
+	private float[] DS4TouchLength;
+	DS4Data data;
+	DS4 controller;
 	void Start () {
-
+		//DS4TouchLength = new float[2]();
+		// DS4TouchLength[0]=1919f
+		// DS4TouchLength[1]=941f;
 		platform = Application.platform;
-		drawArea = new Rect(0, 0, Screen.width - Screen.width / 3, Screen.height);
+		drawArea = new Rect(0, 0, 1919f, 941f);
 
 		//Load pre-made gestures
 		TextAsset[] gesturesXml = Resources.LoadAll<TextAsset>("GestureSet/10-stylus-MEDIUM/");
@@ -44,9 +49,24 @@ public class Demo : MonoBehaviour {
 		foreach (string filePath in filePaths)
 			trainingSet.Add(GestureIO.ReadGestureFromFile(filePath));
 	}
-
+	void CheckDS4Data(){
+		 DS4Data tentative = data;
+        do
+        {
+            data = tentative;
+            tentative = controller.ReadDS4Data();
+        } while (tentative != null);
+	}
 	void Update () {
 
+		if(!DS4Manager.HasWiimote()){
+			DS4Manager.FindWiimotes();
+			
+		}else{
+			controller = DS4Manager.Controllers[0];
+			if(data ==null)CheckDS4Data();
+		}
+		//find the controller
 		if (platform == RuntimePlatform.Android || platform == RuntimePlatform.IPhonePlayer) {
 			if (Input.touchCount > 0) {
 				virtualKeyPosition = new Vector3(Input.GetTouch(0).position.x, Input.GetTouch(0).position.y);
@@ -54,6 +74,10 @@ public class Demo : MonoBehaviour {
 		} else {
 			if (Input.GetMouseButton(0)) {
 				virtualKeyPosition = new Vector3(Input.mousePosition.x, Input.mousePosition.y);
+			}
+			if(DS4Manager.HasWiimote() && data!=null && (data.Touches[0, 0]>-1 || data.Touches[0, 1]>-1||data.Touches[1, 0]>-1 || data.Touches[1, 1]>-1))
+			{//if using the touchpad
+				virtualKeyPosition = new Vector3(data.Touches[0, 0], data.Touches[0, 1]);
 			}
 		}
 
