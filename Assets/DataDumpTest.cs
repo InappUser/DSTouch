@@ -29,8 +29,8 @@ public class DataDumpTest : MonoBehaviour
         if (Visual != null)
             Visual.rotation = data.Orientation.Orientation;
 
-        if (data.TouchButton)
-            MouseHook.SendClick();
+        //if (data.TouchButton)
+        //    MouseHook.SendClick();
     }
 
     void OnGUI()
@@ -78,13 +78,13 @@ public class DataDumpTest : MonoBehaviour
         GUILayout.Label("R2: " + data.R2 + " (" + data.R2_analog + ")");
         GUILayout.Label("L3: " + data.L3);
         GUILayout.Label("R3: " + data.R3);
- myPoint lastPos;
+ //myPoint lastPos;
         
-        //make center of touchpad center screen -- lastposition + (touched - max/2)
-        int maxDiv = 4095 / 2;
-        myPoint p = new myPoint(lastPadPos.x + (maxDiv - data.Touches[0, 0]), lastPadPos.y + (data.Touches[0, 1] - maxDiv));
-        SetCursor.SetCursorPos(p.x, p.y);
-        SetCursor.GetCursorPos(out lastPadPos);
+ //       //make center of touchpad center screen -- lastposition + (touched - max/2)
+ //       int maxDiv = 4095 / 2;
+ //       myPoint p = new myPoint(lastPadPos.x + (maxDiv - data.Touches[0, 0]), lastPadPos.y + (data.Touches[0, 1] - maxDiv));
+ //       SetCursor.SetCursorPos(p.x, p.y);
+ //       SetCursor.GetCursorPos(out lastPadPos);
         //print("cursor pos" + p);
         //GUILayout.Label("Trackpad Finger 3: (" + data.Touches[2, 0] + ", " + data.Touches[2, 1] + ")");
 
