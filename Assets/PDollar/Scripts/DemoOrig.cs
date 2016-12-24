@@ -3,10 +3,10 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
-using DS4Api;
+
 using PDollarGestureRecognizer;
 
-public class Demo : MonoBehaviour {
+public class DemoOrig : MonoBehaviour {
 
 	public Transform gestureOnScreenPrefab;
 
@@ -16,7 +16,7 @@ public class Demo : MonoBehaviour {
 	private int strokeId = -1;
 
 	private Vector3 virtualKeyPosition = Vector2.zero;
-	[SerializeField]private Rect drawArea;
+	[SerializeField] private Rect drawArea = new Rect();
 
 	private RuntimePlatform platform;
 	private int vertexCount = 0;
@@ -28,25 +28,20 @@ public class Demo : MonoBehaviour {
 	private string message;
 	private bool recognized;
 	private string newGestureName = "";
-//1919-941 - from Screen.width - Screen.width / 3, Screen.height
+
+	float height=0f;
+	float areaX=0f;
+	float areaY=0f;
 	private float[] DS4TouchLength = new float[2] { 1919f, 941f };
-    float modifier = .4f;
-	DS4Data data;
-	DS4 controller;
-    int[] lastTouchPos= { -1, -1 };
 
 	void Start () {
-        DS4TouchLength[0] *= modifier;
-        DS4TouchLength[1] *= modifier;
-		float x=(Screen.width - (Screen.width / 3))*modifier;//DS4TouchLength[0]-(DS4TouchLength[0] / 2)
-		float y=Screen.height*modifier;//DS4TouchLength[1] - (DS4TouchLength[1] / 2)
-        print("screen width" + x+" hieght "+ y +"ds4 width "+ DS4TouchLength[0]+ "hieght"+ DS4TouchLength[1] );
-        platform = Application.platform;
 
-        drawArea = new Rect(0, 0, DS4TouchLength[0], DS4TouchLength[1] );
+		platform = Application.platform;
+		//get ratio between touchpad length
+
 
 		//Load pre-made gestures
-		TextAsset[] gesturesXml = Resources.LoadAll<TextAsset>("GestureSet/10-stylus-MEDIUM/");
+		TextAsset[] gesturesXml = Resources.LoadAll<TextAsset>("Gestures");//("GestureSet/10-stylus-MEDIUM/");
 		foreach (TextAsset gestureXml in gesturesXml)
 			trainingSet.Add(GestureIO.ReadGestureFromXML(gestureXml.text));
 
@@ -55,60 +50,30 @@ public class Demo : MonoBehaviour {
 		foreach (string filePath in filePaths)
 			trainingSet.Add(GestureIO.ReadGestureFromFile(filePath));
 	}
-	void CheckDS4Data(){
-
-        print("find wiimotes");
-        DS4Data tentative = data;
-        do
-        {
-            data = tentative;
-            tentative = controller.ReadDS4Data();
-        } while (tentative != null);
+	bool DrawContains(){
+		Rect r = new Rect (drawArea.x + 5, drawArea.y + 5, drawArea.width - 7, drawArea.height - 7);
+		return r.Contains (new Vector2(virtualKeyPosition.x+areaX-1,virtualKeyPosition.y+areaY-1));
 	}
-    bool DS4TouchUsed()
-    {
-		if (data == null)
-			return Input.GetMouseButtonDown (0);//false;
-        return (DS4Manager.HasWiimote() && data != null && (data.Touches[0, 0] > -1 || data.Touches[0, 1] > -1 || data.Touches[1, 0] > -1 || data.Touches[1, 1] > -1));
-    }
-    bool DS4TouchDown()
-    {
-		if (data == null) return Input.GetMouseButton (0);//false;
-        return (data.Touches[0, 0] > -1 && lastTouchPos[0] == -1) || (data.Touches[0, 1] > -1 && lastTouchPos[1] == -1);
-    }
-    void Update () {
+	void Update () {
 
-		if(!DS4Manager.HasWiimote()){
-			DS4Manager.FindWiimotes();
-			
-		}else
-        {
-            controller = DS4Manager.Controllers[0];
-			CheckDS4Data();
-		}
-        //if (data != null) print("data t" + data.Touches[0, 0]);
-		//find the controller
+
 		if (platform == RuntimePlatform.Android || platform == RuntimePlatform.IPhonePlayer) {
 			if (Input.touchCount > 0) {
 				virtualKeyPosition = new Vector3(Input.GetTouch(0).position.x, Input.GetTouch(0).position.y);
 			}
 		} else {
-            if (DS4TouchUsed())
-            {//if using the touchpad
-				virtualKeyPosition = new Vector3(Input.mousePosition.x,Input.mousePosition.y);//data.Touches[0, 0], -data.Touches[0, 1]+ 941f);
-                print("hit");
-            }else if (Input.GetMouseButton(0)) {
+			if (Input.GetMouseButton(0)) {
+				//this needs
 				virtualKeyPosition = new Vector3(Input.mousePosition.x, Input.mousePosition.y);
+				Debug.Log (virtualKeyPosition.x+virtualKeyPosition.y);
 			}
-
 		}
 
-		if (drawArea.Contains(virtualKeyPosition)) {
+		if (DrawContains()) {
+			Debug.Log ("Contains");
+			if (Input.GetMouseButtonDown(0)) {
 
-			if (DS4TouchDown()) {
-
-                print("get down");
-                if (recognized) {
+				if (recognized) {
 
 					recognized = false;
 					strokeId = -1;
@@ -125,31 +90,33 @@ public class Demo : MonoBehaviour {
 				}
 
 				++strokeId;
-				
+
 				Transform tmpGesture = Instantiate(gestureOnScreenPrefab, transform.position, transform.rotation) as Transform;
 				currentGestureLineRenderer = tmpGesture.GetComponent<LineRenderer>();
-				
+
 				gestureLinesRenderer.Add(currentGestureLineRenderer);
-				
+
 				vertexCount = 0;
 			}
-			
-			if (DS4TouchUsed()) {
-                print("add point");
-				points.Add(new Point(virtualKeyPosition.x, -virtualKeyPosition.y, strokeId));
+
+			if (Input.GetMouseButton(0) && currentGestureLineRenderer!=null) {
+				points.Add(new Point(virtualKeyPosition.x, virtualKeyPosition.y, strokeId));
 
 				currentGestureLineRenderer.SetVertexCount(++vertexCount);
 				currentGestureLineRenderer.SetPosition(vertexCount - 1, Camera.main.ScreenToWorldPoint(new Vector3(virtualKeyPosition.x, virtualKeyPosition.y, 10)));
 			}
 		}
-        if (data != null)
-        {
-            lastTouchPos[0] = data.Touches[0, 0];
-            lastTouchPos[1] = data.Touches[0, 1];
-        }
-    }
+	}
 
 	void OnGUI() {
+
+		float screenGap = Screen.width/Screen.height;
+		float width = DS4TouchLength [0];//*(1+(Screen.width*0.1f));//Screen.width - Screen.width / 3;
+		height = Screen.height - Screen.height / 3;
+		areaX = (Screen.width *0.5f) - ((width * 0.5f)+screenGap);
+		areaY = (Screen.height - (Screen.height * 0f)) - (height+screenGap);
+		drawArea.Set(areaX, areaY, width, height);
+
 
 		GUI.Box(drawArea, "Draw Area");
 
@@ -161,7 +128,7 @@ public class Demo : MonoBehaviour {
 
 			Gesture candidate = new Gesture(points.ToArray());
 			Result gestureResult = PointCloudRecognizer.Classify(candidate, trainingSet.ToArray());
-			
+
 			message = gestureResult.GestureClass + " " + gestureResult.Score;
 		}
 
@@ -169,12 +136,12 @@ public class Demo : MonoBehaviour {
 		newGestureName = GUI.TextField(new Rect(Screen.width - 150, 150, 100, 30), newGestureName);
 
 		if (GUI.Button(new Rect(Screen.width - 50, 150, 50, 30), "Add") && points.Count > 0 && newGestureName != "") {
+			string path = Application.dataPath+"/Resources/Gestures";
+			string fileName = String.Format("{0}/{1}-{2}.xml", path, newGestureName, DateTime.Now.ToFileTime());
 
-			string fileName = String.Format("{0}/{1}-{2}.xml", Application.persistentDataPath, newGestureName, DateTime.Now.ToFileTime());
-
-			#if !UNITY_WEBPLAYER
-				GestureIO.WriteGesture(points.ToArray(), newGestureName, fileName);
-			#endif
+			//#if !UNITY_WEBPLAYER
+			GestureIO.WriteGesture(points.ToArray(), newGestureName, fileName);
+			//#endif
 
 			trainingSet.Add(new Gesture(points.ToArray(), newGestureName));
 
