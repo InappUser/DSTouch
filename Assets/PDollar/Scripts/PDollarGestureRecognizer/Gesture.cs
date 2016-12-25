@@ -69,7 +69,7 @@ namespace PDollarGestureRecognizer
     {
         public Point[] Points = null;            // gesture points (normalized)
         public string Name = "";                 // gesture class
-        private const int SAMPLING_RESOLUTION = 32;
+        private const int SAMPLING_RESOLUTION = 33;
 
         /// <summary>
         /// Constructs a gesture from an array of points
