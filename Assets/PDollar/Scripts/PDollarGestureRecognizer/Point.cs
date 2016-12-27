@@ -76,5 +76,13 @@ namespace PDollarGestureRecognizer
             this.Y = y;
             this.StrokeID = strokeId;
         }
+		public override bool Equals(object obj)
+		{
+			if (obj is Point) {
+				Point p = (Point)obj;
+				return (this.X.Equals (p.X) && this.Y.Equals (p.Y) && this.StrokeID.Equals (p.StrokeID));
+			}
+			return false;
+		}
     }
 }

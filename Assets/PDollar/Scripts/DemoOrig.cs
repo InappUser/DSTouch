@@ -4,11 +4,12 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-
+using ShorthandDebug;
 using PDollarGestureRecognizer;
 
-public class DemoOrig : MonoBehaviour {
+public class DemoOrig : MonoBehaviourDebug {
 
+	[SerializeField] bool axis=false;
 	public Transform gestureOnScreenPrefab;
 
 	private List<Gesture> trainingSet = new List<Gesture>();
@@ -28,7 +29,10 @@ public class DemoOrig : MonoBehaviour {
 	private LineRenderer drawnGestureLinerenderer;
 
 	bool populateGestureSelection;
+	bool hitBtnRecognize=false;
 	//GUI
+	bool allPointsRepeating = true; //if eall of the points repeat, then is true and considers the point a tap
+	bool pointRepeatingException=true;
 	private string message;
 	private bool recognized;
 	private string newGestureName = "";
@@ -38,7 +42,7 @@ public class DemoOrig : MonoBehaviour {
 	float areaY=0f;
 	private int[] dS4TouchLength = new int[2] { 1919, 941 };
 
-	float timer=0;
+	Vector2? direction;
 
 	void Start () {
 
@@ -64,6 +68,10 @@ public class DemoOrig : MonoBehaviour {
 		Rect r = new Rect (drawArea.x + 5, drawArea.y + 5, drawArea.width - 7, drawArea.height - 7);
 		return r.Contains (new Vector2(virtualKeyPosition.x+areaX-1,virtualKeyPosition.y+areaY-1));
 	}
+	bool DrawContains(Vector2 _direction){
+		Rect r = new Rect (drawArea.x + 5, drawArea.y + 5, drawArea.width - 7, drawArea.height - 7);
+		return r.Contains (new Vector2(_direction.x+areaX-1,_direction.y+areaY-1));
+	}
 	void PopulateGestureSelection()
 	{	int i = 0;
 		GUIStyle guis = new GUIStyle();
@@ -74,6 +82,7 @@ public class DemoOrig : MonoBehaviour {
 					drawnGestureLinerenderer.SetVertexCount (0);
 					Destroy (drawnGestureLinerenderer);
 				}
+				//ResetPoints ?
 				Transform tmpGesture = Instantiate(gestureOnScreenPrefab, transform.position, transform.rotation) as Transform;
 				drawnGestureLinerenderer = tmpGesture.GetComponent<LineRenderer>();
 				Vector3[] ps = System.Array.ConvertAll<Point,Vector3>(gesture.Points, x=>new Vector3(x.X*3f,x.Y*3f));
@@ -81,9 +90,7 @@ public class DemoOrig : MonoBehaviour {
 				//drawnGestureLinerenderer.SetPositions (ps);
 
 				points.AddRange (gesture.Points);
-				Debug.Log ("run");
 				for (int j = ps.Length-1; j> 0; j--) {
-					Debug.Log ("runL");
 					//Debug.Log (ps [(j==0)?j:j-1]);
 					drawnGestureLinerenderer.SetPosition (j, ps [j]);
 				}
@@ -96,10 +103,10 @@ public class DemoOrig : MonoBehaviour {
 
 	} 
 	void Update () {
-
-		if (currentGestureLineRenderer!=null && Input.GetMouseButtonUp (0)) {
+		if (currentGestureLineRenderer!=null && Input.GetMouseButtonUp (0) && !hitBtnRecognize) {
+			//Timer.instance.SetMethod(this,"Recognize",null,2f,id:"RecognizeWait");
 			Recognize ();
-			Timer.instance.SetVariable (this, "recognized", true, 3f,id:"RecognizeWait");
+			Timer.instance.SetVariable (this, "recognized", true, 2f,id:"ResetRecognizeWait");
 
 		}
 		if (platform == RuntimePlatform.Android || platform == RuntimePlatform.IPhonePlayer) {
@@ -107,31 +114,42 @@ public class DemoOrig : MonoBehaviour {
 				virtualKeyPosition = new Vector3(Input.GetTouch(0).position.x, Input.GetTouch(0).position.y);
 			}
 		} else {
-			if (Input.GetMouseButton(0)) {
+			if (axis) {
+				//if(lastVirtual key position == null)
+				//set position to mouse position- in final it doesn't really matter the positon - though if I can figure this out it will be easier
+				//get last virtual key position
+				//add axis
+				if (DrawContains(Input.mousePosition)) {
+					float x, y;
+					if (direction == null) {
+						direction = Input.mousePosition;
+	
+					}
+					x = direction.Value.x * Input.GetAxis ("Horizontal");
+					y = direction.Value.y * Input.GetAxis ("Vertical");
+
+					direction = new Vector2 (x, y);
+					direction *= Time.deltaTime;
+
+					//transform axis to on screen coordinate
+
+
+					if (DrawContains (direction.Value)) {
+						//SetCursor virtual key as direction?
+					}
+				}
+			}else if (Input.GetMouseButton(0)) {
 				//this needs
 				virtualKeyPosition = new Vector3(Input.mousePosition.x, Input.mousePosition.y);
-				Debug.Log (virtualKeyPosition.x+virtualKeyPosition.y);
 			}
 		}
 
 		if (DrawContains()) {
-			Debug.Log ("Contains");
 			if (Input.GetMouseButtonDown(0)) {
 
 				if (recognized) {
 
-					recognized = false;
-					strokeId = -1;
-
-					points.Clear();
-
-					foreach (LineRenderer lineRenderer in gestureLinesRenderer) {
-
-						lineRenderer.SetVertexCount(0);
-						Destroy(lineRenderer.gameObject);
-					}
-
-					gestureLinesRenderer.Clear();
+					ResetPoints ();
 				}
 
 				++strokeId;
@@ -143,23 +161,70 @@ public class DemoOrig : MonoBehaviour {
 
 				vertexCount = 0;
 			}
-
-			if (Input.GetMouseButton(0) && currentGestureLineRenderer!=null) {
+			if (Input.GetMouseButton(0) && currentGestureLineRenderer!=null ) {//&& (vertexCount<34)
 				points.Add(new Point(virtualKeyPosition.x, virtualKeyPosition.y, strokeId));
-
+				if (points.Count > 1) {
+					int i = points.Count - 1;
+					bool tmp = (points [i].Equals (points [i - 1]));
+//					l.g("!!!X:  {0} | {1}  , Y:  {2} | {3}  , Y:  {4} | {5}  equals? {6}",points[i].X,points[i-1].X,points[i].Y,points[i-1].Y,points[i].StrokeID,points[i-1].StrokeID, (points [i].Equals (points [i - 1])));
+					allPointsRepeating = (allPointsRepeating == true && tmp);//if any don't match, then is a gesture
+					l.g ("");
+				} else if(allPointsRepeating){
+					allPointsRepeating = false;
+				}
 				currentGestureLineRenderer.SetVertexCount(++vertexCount);
 				currentGestureLineRenderer.SetPosition(vertexCount - 1, Camera.main.ScreenToWorldPoint(new Vector3(virtualKeyPosition.x, virtualKeyPosition.y, 10)));
 			}
 		}
+		if (axis) {
+		//if getaxis down
+			//if recognised
+				//reset recognized and stroke id(-1)
+				//clear points
+				//destroy linerenderer
+			++strokeId;
+
+			Transform tmpGesture = Instantiate(gestureOnScreenPrefab, transform.position, transform.rotation) as Transform;
+			currentGestureLineRenderer = tmpGesture.GetComponent<LineRenderer>();
+
+			gestureLinesRenderer.Add(currentGestureLineRenderer);
+
+			vertexCount = 0;
+
+			if (Input.GetAxis ("Vertical") != 0) {
+				
+			}
+		}
 	}
 
+	void ResetPoints()
+	{
+		l.g ("reset points");
+		recognized = false;
+		strokeId = -1;
+
+		points.Clear();
+		allPointsRepeating = true;
+		foreach (LineRenderer lineRenderer in gestureLinesRenderer) {
+
+			lineRenderer.SetVertexCount(0);
+			Destroy(lineRenderer.gameObject);
+		}
+
+		gestureLinesRenderer.Clear();
+	}
 	void Recognize()
 	{
-		
-		Gesture candidate = new Gesture(points.ToArray());//transofrms array of any length into a "gesture", producing a an array the size of the sampling resolution  
-		Result gestureResult = PointCloudRecognizer.Classify(candidate, trainingSet.ToArray());
+		if (!allPointsRepeating) {
+			l.g ("not All same {0}",points.Count);
+			//string.Format ("dog{0}", points.Count);
+			Gesture candidate = new Gesture (points.ToArray ());//transofrms array of any length into a "gesture", producing a an array the size of the sampling resolution  
+			Result gestureResult = PointCloudRecognizer.Classify (candidate, trainingSet.ToArray ());
 
-		message = gestureResult.GestureClass + " " + gestureResult.Score;
+			message = gestureResult.GestureClass + " " + gestureResult.Score;
+		} else {
+			l.g ("All same");
+		}
 	}
 	void OnGUI() {
 
@@ -178,8 +243,9 @@ public class DemoOrig : MonoBehaviour {
 		GUI.Label(new Rect(10, Screen.height - 40, 500, 50), message);
 
 		if (GUI.Button(new Rect(Screen.width - 100, 10, 100, 30), "Recognize")) {
-			//if has been drawn on, and has been left for x amount of seconds
+			hitBtnRecognize=true;
 			Recognize();
+			Timer.instance.SetVariable (this, "hitBtnRecognize", false, 1.2f, id:"BtnRecognizeFalse");
 		}
 
 		GUI.Label(new Rect(Screen.width - 280, 150, 70, 30), "Add or display ");

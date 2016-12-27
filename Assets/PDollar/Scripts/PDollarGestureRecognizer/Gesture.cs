@@ -58,7 +58,7 @@
  * SUCH DAMAGE.
 **/
 using System;
-
+using ShorthandDebug;
 namespace PDollarGestureRecognizer
 {
     /// <summary>
@@ -75,13 +75,20 @@ namespace PDollarGestureRecognizer
         /// Constructs a gesture from an array of points
         /// </summary>
         /// <param name="points"></param>
-        public Gesture(Point[] points, string gestureName = "")
+		public Gesture(Point[] _points, string gestureName = "", bool same=false)
         {
+			if (_points.Length < 2) {
+				Point[] tmp = new Point[2];
+				tmp [0] = _points [0];
+				tmp [1] = new Point(0.2f,0.1f,_points[0].StrokeID);
+				_points = tmp;
+			}
             this.Name = gestureName;
             
             // normalizes the array of points with respect to scale, origin, and number of points
-            this.Points = Scale(points);
-            this.Points = TranslateTo(Points, Centroid(Points));
+			this.Points = (same) ? _points : Scale(_points);
+			Point c = Centroid(Points);
+            this.Points = TranslateTo(Points, c);
             this.Points = Resample(Points, SAMPLING_RESOLUTION);
         }
 
@@ -95,7 +102,7 @@ namespace PDollarGestureRecognizer
         private Point[] Scale(Point[] points)
         {
             float minx = float.MaxValue, miny = float.MaxValue, maxx = float.MinValue, maxy = float.MinValue;
-            for (int i = 0; i < points.Length; i++)
+             for (int i = 0; i < points.Length; i++)
             {
                 if (minx > points[i].X) minx = points[i].X;
                 if (miny > points[i].Y) miny = points[i].Y;
@@ -140,13 +147,57 @@ namespace PDollarGestureRecognizer
             return new Point(cx / points.Length, cy / points.Length, 0);
         }
 
+		public Point[] Resample(Point[] points, int n)
+		{
+			Point[] newPoints = new Point[n];
+			newPoints[0] = new Point(points[0].X, points[0].Y, points[0].StrokeID);
+			int numPoints = 1;
+
+			float I = PathLength(points) / (n - 1); // computes interval length
+			float D = 0;
+			for (int i = 1; i < points.Length; i++)
+			{
+				
+				if (points[i].StrokeID == points[i - 1].StrokeID)
+				{
+					float d = Geometry.EuclideanDistance(points[i - 1], points[i]);
+					if (D + d >= I)
+					{
+						Point firstPoint = points[i - 1];
+						while (D + d >= I)
+						{
+							// add interpolated point
+							float t = Math.Min(Math.Max((I - D) / d, 0.0f), 1.0f);
+							if (float.IsNaN(t)) t = 0.5f;
+							newPoints[numPoints++] = new Point(
+								(1.0f - t) * firstPoint.X + t * points[i].X,
+								(1.0f - t) * firstPoint.Y + t * points[i].Y,
+								points[i].StrokeID
+							);
+
+							// update partial length
+							d = D + d - I;
+							D = 0;
+							firstPoint = newPoints[numPoints - 1];
+						}
+						D = d;
+					}
+					else D += d;
+				}
+			}
+
+			if (numPoints == n - 1) // sometimes we fall a rounding-error short of adding the last point, so add it if so
+				newPoints[numPoints++] = new Point(points[points.Length - 1].X, points[points.Length - 1].Y, points[points.Length - 1].StrokeID);
+			return newPoints;
+		}
+
         /// <summary>
         /// Resamples the array of points into n equally-distanced points
         /// </summary>
         /// <param name="points"></param>
         /// <param name="n"></param>
         /// <returns></returns>
-        public Point[] Resample(Point[] points, int n)
+        public Point[] Resample2(Point[] points, int n)
         {
             Point[] newPoints = new Point[n];
             newPoints[0] = new Point(points[0].X, points[0].Y, points[0].StrokeID);
@@ -154,15 +205,23 @@ namespace PDollarGestureRecognizer
 
             float I = PathLength(points) / (n - 1); // computes interval length
             float D = 0;
-            for (int i = 1; i < points.Length; i++)
+			l.g ("points larget than n? "+(points.Length > n));
+			//length of points is otherwise expected to be atleast SAMPLING_RESOLUTION - just a bit of error handling
+			//- should really be interpolating bwtween points by the difference between old points.Length and SAMPLING_RESOLUTION
+			int larger = points.Length;//(points.Length > n) ? points.Length : n;
+			int i=1;
+			for (int j = 1; j < larger; j++)
             {
+				//reset to begining if out of range
+				i = (j<points.Length)?j:1;
+
                 if (points[i].StrokeID == points[i - 1].StrokeID)
                 {
                     float d = Geometry.EuclideanDistance(points[i - 1], points[i]);
-                    if (D + d >= I)
+					if (D + d >= I)
                     {
                         Point firstPoint = points[i - 1];
-                        while (D + d >= I)
+						while (D + d >= I && numPoints<newPoints.Length)
                         {
                             // add interpolated point
                             float t = Math.Min(Math.Max((I - D) / d, 0.0f), 1.0f);
