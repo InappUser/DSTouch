@@ -1,15 +1,15 @@
 ﻿using UnityEngine;
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using ShorthandDebug;
+using UnityEngine.UI;
 using PDollarGestureRecognizer;
 
 public class DemoOrig : MonoBehaviourDebug {
-
+	[SerializeField] RectTransform gestureDrawArea;
 	[SerializeField] bool axis=false;
+	[SerializeField] float axisSpeed=2;
 	public Transform gestureOnScreenPrefab;
 
 	private List<Gesture> trainingSet = new List<Gesture>();
@@ -18,7 +18,7 @@ public class DemoOrig : MonoBehaviourDebug {
 	private int strokeId = -1;
 
 	private Vector3 virtualKeyPosition = Vector2.zero;
-	[SerializeField] private Rect drawArea = new Rect();
+	private Rect drawArea = new Rect();
 
 	private RuntimePlatform platform;
 	private int vertexCount = 0;
@@ -31,18 +31,20 @@ public class DemoOrig : MonoBehaviourDebug {
 	bool populateGestureSelection;
 	bool hitBtnRecognize=false;
 	//GUI
-	bool allPointsRepeating = true; //if eall of the points repeat, then is true and considers the point a tap
+	bool allPointsRepeating = true; //if all of the points repeat, then is true and considers the point a tap
 	bool pointRepeatingException=true;
+	bool axisDown=false;
+	bool axisUp = false;
 	private string message;
 	private bool recognized;
+
 	private string newGestureName = "";
 
-	float height=0f;
 	float areaX=0f;
 	float areaY=0f;
-	private int[] dS4TouchLength = new int[2] { 1919, 941 };
+	private float[] dS4TouchLength = new float[2] { 0.1919f, 0.0941f };
 
-	Vector2? direction;
+	[SerializeField]Vector2 direction;
 
 	void Start () {
 
@@ -65,11 +67,21 @@ public class DemoOrig : MonoBehaviourDebug {
 			trainingSet.Add(GestureIO.ReadGestureFromFile(filePath));
 	}
 	bool DrawContains(){
-		Rect r = new Rect (drawArea.x + 5, drawArea.y + 5, drawArea.width - 7, drawArea.height - 7);
-		return r.Contains (new Vector2(virtualKeyPosition.x+areaX-1,virtualKeyPosition.y+areaY-1));
+		return DrawContains (virtualKeyPosition);
+//		float margin = (drawArea.x * 0.05f);
+//		Rect r = new Rect (drawArea.x + drawArea.x + margin, drawArea.y + margin, drawArea.width - margin *2, drawArea.height - margin*2);
+//		return r.Contains (new Vector2(virtualKeyPosition.x+areaX-1,virtualKeyPosition.y+areaY-1));
 	}
 	bool DrawContains(Vector2 _direction){
-		Rect r = new Rect (drawArea.x + 5, drawArea.y + 5, drawArea.width - 7, drawArea.height - 7);
+		float marginX = (drawArea.x * 0.05f);
+		float marginY = (drawArea.y * 0.05f);
+		Rect r = new Rect (drawArea.x + drawArea.x + marginX, drawArea.y + marginY, drawArea.width - marginX *2, drawArea.height - marginY*2);
+//		if (Input.GetKey (KeyCode.Z)) {
+//			//bool jerry= r.Contains (new Vector2(virtualKeyPosition.x+areaX-1,virtualKeyPosition.y+areaY-1));
+//			float t = Input.GetAxis ("Vertical");
+//			l.g ("2@e2");
+//			l.g ("WDW{0}", virtualKeyPosition);
+//		}
 		return r.Contains (new Vector2(_direction.x+areaX-1,_direction.y+areaY-1));
 	}
 	void PopulateGestureSelection()
@@ -102,13 +114,19 @@ public class DemoOrig : MonoBehaviourDebug {
 
 
 	} 
-	void Update () {
-		if (currentGestureLineRenderer!=null && Input.GetMouseButtonUp (0) && !hitBtnRecognize) {
-			//Timer.instance.SetMethod(this,"Recognize",null,2f,id:"RecognizeWait");
-			Recognize ();
-			Timer.instance.SetVariable (this, "recognized", true, 2f,id:"ResetRecognizeWait");
-
-		}
+//	bool GetAxisDown(){
+//		
+//			if ((axisDown == false) && (Input.GetAxisRaw ("Vertical") != 0 || Input.GetAxisRaw ("Horizontal") != 0)) {
+//				return true;
+//			} else if(axisDown == true) {
+//				l.g ("ax don{0} , vertical: {1} , hori: {2} ", axisDown,(Input.GetAxisRaw ("Vertical")!=0),(Input.GetAxisRaw ("Horizontal")!=0));
+//				Timer.instance.SetVariable (this, "axisDown", false, 1.5f, id: "ResetAxisDown");//set axisDown to false on a delay if there is not input
+//				return false;
+//			}
+//
+//		return false;
+//	}
+	void FindVirtualKey(){
 		if (platform == RuntimePlatform.Android || platform == RuntimePlatform.IPhonePlayer) {
 			if (Input.touchCount > 0) {
 				virtualKeyPosition = new Vector3(Input.GetTouch(0).position.x, Input.GetTouch(0).position.y);
@@ -120,22 +138,30 @@ public class DemoOrig : MonoBehaviourDebug {
 				//get last virtual key position
 				//add axis
 				if (DrawContains(Input.mousePosition)) {
-					float x, y;
-					if (direction == null) {
+					if (direction.Equals(Vector2.zero)) {
 						direction = Input.mousePosition;
-	
-					}
-					x = direction.Value.x * Input.GetAxis ("Horizontal");
-					y = direction.Value.y * Input.GetAxis ("Vertical");
+//						if (Input.GetKey (KeyCode.Z)) {
+//							//bool jerry= r.Contains (new Vector2(virtualKeyPosition.x+areaX-1,virtualKeyPosition.y+areaY-1));
+//							float t = Input.GetAxis ("Vertical");
+//							l.g ("2@e2");
+//							l.g ("WDW{0}", virtualKeyPosition);
+//						}
+					} 
+					if(GetVKeys) {
+						//turn axis into onscreen coord
+						var tmpDir = new Vector2(Input.GetAxisRaw ("Horizontal"), Input.GetAxisRaw ("Vertical"));
+						if (tmpDir.magnitude > 1)//get rid of diagonal speed increase
+							tmpDir = tmpDir.normalized;
 
-					direction = new Vector2 (x, y);
-					direction *= Time.deltaTime;
-
-					//transform axis to on screen coordinate
-
-
-					if (DrawContains (direction.Value)) {
-						//SetCursor virtual key as direction?
+						var toAddTmpDir = new Vector2 (direction.x + (tmpDir.x*axisSpeed),
+							direction.y +  (tmpDir.y *axisSpeed));
+						
+						//make official if within bounds
+						if (DrawContains (toAddTmpDir)) {
+							direction = toAddTmpDir;
+							virtualKeyPosition = (Vector3)direction;
+							l.g ("axis hit");
+						}
 					}
 				}
 			}else if (Input.GetMouseButton(0)) {
@@ -143,56 +169,81 @@ public class DemoOrig : MonoBehaviourDebug {
 				virtualKeyPosition = new Vector3(Input.mousePosition.x, Input.mousePosition.y);
 			}
 		}
-
-		if (DrawContains()) {
-			if (Input.GetMouseButtonDown(0)) {
+	}
+	bool GetVKeysUp{
+		get{ 
+			if (axis) {
+				if (axisUp = false && (Input.GetAxis ("Vertical") == 0 && Input.GetAxis ("Horizontal") == 0)) {
+					axisUp = true;
+					return true;
+				} else if (axisUp == true && !GetVKeys) {
+					Timer.instance.SetVariable (this, "axisUp", false, 1.5f, id: "ResetAxisUp");//set axisDown to false on a delay if there is not input
+					return false;
+				}
+				return false;
+			} else {
+				return Input.GetMouseButtonUp (0);
+			}
+		}
+	}
+	bool GetVKeysDown{get{ 
+		if (axis) {
+//				l.g("axisDown: {0} , vertical: {1} , hori: {2} ", axisDown,(Input.GetAxisRaw ("Vertical")),(Input.GetAxisRaw ("Horizontal")));
+			if ((axisDown == false) && (Input.GetAxisRaw ("Vertical") != 0 || Input.GetAxisRaw ("Horizontal") != 0)) {
+				axisDown = true;
+				return true;
+			} else if(axisDown == true && GetVKeys) {
+//				l.g ("ax don{0} , vertical: {1} , hori: {2} ", axisDown,(Input.GetAxisRaw ("Vertical")!=0),(Input.GetAxisRaw ("Horizontal")!=0));
+				Timer.instance.SetVariable (this, "axisDown", false, 1.5f, id: "ResetAxisDown");//set axisDown to false on a delay if there is not input
+				return false;
+			}
+			return false;
+		} else {
+			return Input.GetMouseButtonDown (0);
+		}
+	}}
+	bool GetVKeys{get{ 
+		if (axis) {
+			return (Input.GetAxis ("Vertical") != 0 || Input.GetAxis ("Horizontal") != 0);
+		} else {
+			return Input.GetMouseButton (0);
+		}
+	}}
+	void Update () {
+		if (currentGestureLineRenderer!=null && (  GetVKeysUp  ) && !hitBtnRecognize) {
+			l.g ("recognise from update");
+			Recognize ();
+			Timer.instance.SetVariable (this, "recognized", true, 2f,id:"ResetRecognizeWait");
+		}
+		FindVirtualKey ();
+		if (DrawContains ()) {
+			if (GetVKeysDown) {
 
 				if (recognized) {
-
 					ResetPoints ();
 				}
-
 				++strokeId;
 
-				Transform tmpGesture = Instantiate(gestureOnScreenPrefab, transform.position, transform.rotation) as Transform;
-				currentGestureLineRenderer = tmpGesture.GetComponent<LineRenderer>();
+				Transform tmpGesture = Instantiate (gestureOnScreenPrefab, transform.position, transform.rotation) as Transform;
+				currentGestureLineRenderer = tmpGesture.GetComponent<LineRenderer> ();
 
-				gestureLinesRenderer.Add(currentGestureLineRenderer);
+				gestureLinesRenderer.Add (currentGestureLineRenderer);
 
 				vertexCount = 0;
 			}
-			if (Input.GetMouseButton(0) && currentGestureLineRenderer!=null ) {//&& (vertexCount<34)
-				points.Add(new Point(virtualKeyPosition.x, virtualKeyPosition.y, strokeId));
+			if (GetVKeys && currentGestureLineRenderer != null) {//&& (vertexCount<34)
+				points.Add (new Point (virtualKeyPosition.x, virtualKeyPosition.y, strokeId));
 				if (points.Count > 1) {
 					int i = points.Count - 1;
 					bool tmp = (points [i].Equals (points [i - 1]));
 //					l.g("!!!X:  {0} | {1}  , Y:  {2} | {3}  , Y:  {4} | {5}  equals? {6}",points[i].X,points[i-1].X,points[i].Y,points[i-1].Y,points[i].StrokeID,points[i-1].StrokeID, (points [i].Equals (points [i - 1])));
 					allPointsRepeating = (allPointsRepeating == true && tmp);//if any don't match, then is a gesture
-					l.g ("");
-				} else if(allPointsRepeating){
+					//l.g ("");
+				} else if (allPointsRepeating) {
 					allPointsRepeating = false;
 				}
-				currentGestureLineRenderer.SetVertexCount(++vertexCount);
-				currentGestureLineRenderer.SetPosition(vertexCount - 1, Camera.main.ScreenToWorldPoint(new Vector3(virtualKeyPosition.x, virtualKeyPosition.y, 10)));
-			}
-		}
-		if (axis) {
-		//if getaxis down
-			//if recognised
-				//reset recognized and stroke id(-1)
-				//clear points
-				//destroy linerenderer
-			++strokeId;
-
-			Transform tmpGesture = Instantiate(gestureOnScreenPrefab, transform.position, transform.rotation) as Transform;
-			currentGestureLineRenderer = tmpGesture.GetComponent<LineRenderer>();
-
-			gestureLinesRenderer.Add(currentGestureLineRenderer);
-
-			vertexCount = 0;
-
-			if (Input.GetAxis ("Vertical") != 0) {
-				
+				currentGestureLineRenderer.SetVertexCount (++vertexCount);
+				currentGestureLineRenderer.SetPosition (vertexCount - 1, Camera.main.ScreenToWorldPoint (new Vector3 (virtualKeyPosition.x, virtualKeyPosition.y, 10)));
 			}
 		}
 	}
@@ -216,23 +267,31 @@ public class DemoOrig : MonoBehaviourDebug {
 	void Recognize()
 	{
 		if (!allPointsRepeating) {
-			l.g ("not All same {0}",points.Count);
+			l.g ("Recognize",points.Count);
 			//string.Format ("dog{0}", points.Count);
 			Gesture candidate = new Gesture (points.ToArray ());//transofrms array of any length into a "gesture", producing a an array the size of the sampling resolution  
 			Result gestureResult = PointCloudRecognizer.Classify (candidate, trainingSet.ToArray ());
 
 			message = gestureResult.GestureClass + " " + gestureResult.Score;
 		} else {
-			l.g ("All same");
+			//l.g ("All same");
 		}
 	}
 	void OnGUI() {
 
 		float screenGap = Screen.width/Screen.height;
-		float width = (100+((float)dS4TouchLength [0]*0.01f))*(1+(Screen.width*0.005f));//Screen.width - Screen.width / 3;
-		height = (100+((float)dS4TouchLength [1]*0.01f))*(1+(Screen.height*0.005f));//Screen.width - Screen.width / 3;//Screen.height - Screen.height / 3;
+
+		float width = (dS4TouchLength [0]*3f)*(1+(Screen.height));//Screen.width - Screen.width / 3;
+		float height = (dS4TouchLength [1]*3f)*(1+(Screen.height));//Screen.width - Screen.width / 3;//Screen.height - Screen.height / 3;
+
+//		float width = (100+((float)dS4TouchLength [0]*0.01f))*(1+(Screen.width*0.005f));//Screen.width - Screen.width / 3;
+//		float height = (100+((float)dS4TouchLength [1]*0.01f))*(1+(Screen.height*0.005f));//Screen.width - Screen.width / 3;//Screen.height - Screen.height / 3;
+//
+//		areaX = (Screen.width *0.5f) - ((width * 0.5f)+screenGap);
+//		areaY = (Screen.height - (Screen.height * 0f)) - (height+screenGap);
 		areaX = (Screen.width *0.5f) - ((width * 0.5f)+screenGap);
 		areaY = (Screen.height - (Screen.height * 0f)) - (height+screenGap);
+		//drawArea = gestureDrawArea.rect;
 		drawArea.Set(areaX, areaY, width, height);
 
 		PopulateGestureSelection ();

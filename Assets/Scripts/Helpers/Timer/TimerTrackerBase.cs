@@ -8,6 +8,8 @@ public abstract class TimerTrackerBase : MonoBehaviour
     protected object creator;
    [SerializeField]
 	protected float time;
+	public float ThisTime{get{return time;} set{time = value;}}
+
     protected bool init = false;
 	protected string id="";
 	protected string display="";
@@ -20,10 +22,10 @@ public abstract class TimerTrackerBase : MonoBehaviour
 	}
 	public string GetID(){return id;}
 	public string GetDisplay(){return display;}
-	void Start()
-	{
-		RemoveConflictingIDs ();
-	}
+//	void Start()
+//	{
+//		RemoveConflictingIDs ();
+//	}
 	protected void InitIDandDisplay(string _id, string _display)
 	{
 		id = _id;
@@ -46,14 +48,14 @@ public abstract class TimerTrackerBase : MonoBehaviour
 		Timer.instance.RemoveTracker(this);
     }
 
-	protected void RemoveConflictingIDs()
-	{
-		if (id != "") {//don't remove everything without a passed ID
-			Timer.instance.RemoveByID (id, this);
-		}
-		//if float time !=0
-		//get instance by ID, reset timer and remove this? pointless? think if I were going to be doing this kind of logic it should be pior to "this" object creation
-	}
+//	protected void RemoveConflictingIDs()
+//	{
+//		if (id != "") {//don't remove everything without a passed ID
+//			Timer.instance.RemoveByID (id, this);
+//		}
+//		//if float time !=0
+//		//get instance by ID, reset timer and remove this? pointless? think if I were going to be doing this kind of logic it should be pior to "this" object creation
+//	}
     protected bool CheckLogTypeError(System.Type assignee, System.Type assigner)
     {
 		//Debug.Log"assignee: "+assignee+"Assigner: "+assigner);

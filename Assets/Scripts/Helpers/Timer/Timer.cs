@@ -1,12 +1,13 @@
 ﻿using UnityEngine;
 using System.Collections.Generic;
-//using GenericToolkit.Game;
+using System.Collections;
+using ShorthandDebug;
 public class Timer
 {
 	
-	//private IterativeBehaviourPool<TimerTrackerBase> timerTrackerObjectPool = null;
-	//private Dictioanry<string, TimerTrackerBase> timerTrackerObjectPool = new Dictioanry<string, TimerTrackerBase>();
-	private List<TimerTrackerBase> timerTrackerObjectPool = new List<TimerTrackerBase>();
+
+	private  BiDictionary<TimerTrackerBase,string> timerTrackerBiDicObjectPool = new BiDictionary<TimerTrackerBase,string>();
+	//private List<TimerTrackerBase> timerTrackerObjectPool = new List<TimerTrackerBase>();
 	private static Timer thisInstance;
 	//public static implicit operator bool(Timer t){return t == null;}
 	private Timer(){}
@@ -23,6 +24,25 @@ public class Timer
 		}
 		private set{}
 	}
+	void CheckIfAlreadyExists(ref float _time, ref string _id, ref bool _ignoreMultipleCalls, out TimerTrackerBase trackerToReturnEarly)
+	{
+		if (_id != "" && timerTrackerBiDicObjectPool.ContainsValue (_id)) {
+			if (_ignoreMultipleCalls) {
+				l.g ("ignore! {0}",_id);
+				trackerToReturnEarly = timerTrackerBiDicObjectPool.GetKey (_id);
+			} else if (_time != 0) {
+				l.g ("reset!! {0}",_id);
+					trackerToReturnEarly = ResetConflictingIDsTime (_id, _time);
+			} else {
+				l.g ("remove!! {0}",_id);
+				RemoveConflictingID (_id);
+				trackerToReturnEarly = null;
+			}
+		} else {
+			l.g ("nothing {0}",_id);
+			trackerToReturnEarly = null;
+		}
+	}
     /// <summary>
     /// Sets a variable to a passed value over a certain amount of time
     /// </summary>
@@ -33,9 +53,16 @@ public class Timer
 	/// <param name="attachTo">(optional)The gameobject the Timer will be attached to (defaults to creator)</param>
 	/// <param name="id">(optional)An ID to show up in the inspector to track which Timer is being used. This ensures that two of the same kind are not attached.</param>
 	/// <param name="display">(optional)An name to show up in the inspector to track which Timer is being used. This is purely aesthetic</param>
-	public TimerTrackerVarSet SetVariable(object creator, string variableToSetName, object val, float time, GameObject attachTo = null, string id="", string display="")
+	public TimerTrackerVarSet SetVariable(object creator, string variableToSetName, object val, float time, GameObject attachTo = null, string id="", string display="", bool ignoreMultipleCalls=false)
 	{
-		TimerTrackerVarSet timerTracker = InitTimerTracker<TimerTrackerVarSet>(attachTo==null ? creator : attachTo/*, id*/);
+		TimerTrackerBase t;
+		CheckIfAlreadyExists (ref time, ref id, ref ignoreMultipleCalls, out  t);
+		if (t != null) {
+			l.g ("return t");
+			return (TimerTrackerVarSet)t;
+		}
+
+		TimerTrackerVarSet timerTracker = InitTimerTracker<TimerTrackerVarSet>(attachTo==null ? creator : attachTo, id, time);
 		timerTracker.Init(creator, time, variableToSetName, val, id, display);
 		return timerTracker;
 	}
@@ -106,7 +133,7 @@ public class Timer
 	/// <returns>The timer tracker.</returns>
 	/// <param name="_attachTo">Attach to.</param>
 	/// <typeparam name="T">The 1st type parameter.</typeparam>
-	private T InitTimerTracker<T>( object _attachTo/*, string _id, float time=0*/) where T : TimerTrackerBase
+	private T InitTimerTracker<T>( object _attachTo, string _id="", float _time=0) where T : TimerTrackerBase
 	{
 		T t;
 		if (_attachTo.GetType () != typeof(GameObject)) { // if not using passed gameobject
@@ -116,11 +143,10 @@ public class Timer
 			GameObject go = (GameObject)_attachTo;
 			t = go.AddComponent<T> ();
 		}
-		//if(id!=""){
-		//	if(time!=0)ResetConflictingIDTime(_id)
-		//	else RemoveConflictingID(_id)
-		//}
-		timerTrackerObjectPool.Add (t);
+
+//		l.g ("Add tracker | attach to {0}",_attachTo);
+		timerTrackerBiDicObjectPool.Add(t,_id);
+		//timerTrackerObjectPool.Add (t);
 		return t;
 //		if (timerTrackerObjectPool == null) {
 //			timerTrackerObjectPool = new IterativeBehaviourPool<TimerTrackerBase> (t);
@@ -128,10 +154,11 @@ public class Timer
 //			timerTrackerObjectPool.
 //		}
 	}
-	public void RemoveTracker(TimerTrackerBase tracker)
+	public void RemoveTracker(TimerTrackerBase _tracker)
 	{
-		timerTrackerObjectPool.Remove (tracker);
-		UnityEngine.MonoBehaviour.DestroyImmediate (tracker);
+		l.g ("Remove tracker");
+		timerTrackerBiDicObjectPool.Remove(_tracker);
+		UnityEngine.MonoBehaviour.DestroyImmediate (_tracker);
 	}
 //	void PauseTimers(GameState _state){
 //		Debug.Log ("paused? " + (_state == GameState.GAMEPLAY_PAUSE));
@@ -140,33 +167,46 @@ public class Timer
 //	void UnPauseTimers(GameState _state){
 //		Debug.Log ("paused? " + (_state == GameState.GAMEPLAY_PAUSE));
 //		PauseAll (false);}
-	Dictionary<string, TimerTrackerBase> d = new Dictionary<string, TimerTrackerBase>();
-	//ResetConflictingIDTime(string id)
-	//RemoveConflictingID(string id)
-	public void RemoveByID(string id, TimerTrackerBase caller)
+	TimerTrackerBase ResetConflictingIDsTime(string _id, float _time)
 	{
-//		for (int i = 0; i < d.Count; i++) {
-//			Debug.Log(d.Values[0]);
-//		}
-		for (int i = 0; i < timerTrackerObjectPool.Count; i++) { 
-			if (timerTrackerObjectPool[i].gameObject == caller.gameObject && //check is on the same object
-				timerTrackerObjectPool [i].GetID () == id && //check if has the right ID
-			    timerTrackerObjectPool [i] != caller) { 
-				//check that there is a caller and this isn't it or that there isn't a caller
-				Debug.Log ("removing " + timerTrackerObjectPool[i].GetDisplay());
-				RemoveTracker(timerTrackerObjectPool[i]);
-			}
-				//				if ((caller != null && temp != caller) || caller==null) {
+		//l.g ("get tracker");
+		TimerTrackerBase t;
+		if (timerTrackerBiDicObjectPool.GetKey (_id, out t)) {
+			//l.g ("resetTime");
+			t.ThisTime = _time;
 		}
-//		List<TimerTrackerBase> temp=new List<TimerTrackerBase>();
-//		foreach (TimerTrackerBase tt in timerTrackerObjectPool) {
-//			if (tt.GetID () == id) {
-//				if ((caller != null && temp != caller) || caller==null) {
-//					timerTrackerObjectPool.Remove (tt);
-//					temp.Add (tt);
-//				}
-//			}
-//		}
-//		timerTrackerObjectPool.RemoveAll (x => temp.Contains (x));
+		return t;
 	}
+	void RemoveConflictingID(string id)
+	{
+		//l.g ("Remove conflicting tracker");
+		timerTrackerBiDicObjectPool.Remove (id);
+	}
+//	public void RemoveByID(string id, TimerTrackerBase caller)
+//	{
+////		for (int i = 0; i < d.Count; i++) {
+////			Debug.Log(d.Values[0]);
+////		}
+//
+//		for (int i = 0; i < timerTrackerObjectPool.Count; i++) { 
+//			if (timerTrackerObjectPool[i].gameObject == caller.gameObject && //check is on the same object
+//				timerTrackerObjectPool [i].GetID () == id && //check if has the right ID
+//			    timerTrackerObjectPool [i] != caller) { 
+//				//check that there is a caller and this isn't it or that there isn't a caller
+//				Debug.Log ("removing " + timerTrackerObjectPool[i].GetDisplay());
+//				RemoveTracker(timerTrackerObjectPool[i]);
+//			}
+//				//				if ((caller != null && temp != caller) || caller==null) {
+//		}
+////		List<TimerTrackerBase> temp=new List<TimerTrackerBase>();
+////		foreach (TimerTrackerBase tt in timerTrackerObjectPool) {
+////			if (tt.GetID () == id) {
+////				if ((caller != null && temp != caller) || caller==null) {
+////					timerTrackerObjectPool.Remove (tt);
+////					temp.Add (tt);
+////				}
+////			}
+////		}
+////		timerTrackerObjectPool.RemoveAll (x => temp.Contains (x));
+//	}
 }
